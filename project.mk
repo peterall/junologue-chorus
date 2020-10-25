@@ -2,7 +2,7 @@
 # Project Customization
 # #############################################################################
 
-PROJECT = junologue-chorus-I
+PROJECT = junologue-chorus
 
 UCSRC =
 

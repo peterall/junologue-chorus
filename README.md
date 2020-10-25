@@ -1,12 +1,10 @@
-## Modulation Effect Template Project 
+# Juno 60 Chorus Emulation for Korg *louges
 
-This project can be used as a basis for custom modulation effects. **Refer to [parent platform](../) for build instructions.**
+**Time** knob controls mode: I - II - I and II.
 
-### FAQ
+**Depth** knob controls dry/wet ratio.
 
-#### Why does MODFX_PROCESS() have *main* and *sub* inputs and outputs?
+_Note that the I and II mode is different from the Juno 60 "both buttons in" mode. In this emulation I and II mode enables both choruses in parallel, similar to the TAL U-NO-LX._
 
-The modulation effect API was originally designed for the prologue synthesizer which allows each *main* and *sub* timbre audio to be processed independently by the modulation effect section.
-This interface was maintained in order to preserve API compatibility between the minilogue xd and prologue. 
-For an effect to properly work on the prologue, both inputs should be processed in the same way and the result written to the corresponding output.
+Thanks to [Andy Harman](https://github.com/pendragon-andyh) and [JP Cimalando](https://github.com/jpcima) for Juno 60 chorus research, and [émilie gillet](https://github.com/pichenettes) for [stmlib](https://github.com/pichenettes/stmlib) DSP functions.
 

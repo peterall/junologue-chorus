@@ -39,13 +39,34 @@ constexpr uint32_t nextpow2_u32_constexpr(uint32_t x) {
   return ++x;
 }
 
-static constexpr size_t delay_size = nextpow2_u32_constexpr(static_cast<uint32_t>(params.max_delay * bbd_samplerate));
+inline float Crossfade(float a, float b, float fade) {
+  return a + (b - a) * fade;
+}
+
+inline float SoftLimit(float x) {
+  return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
+}
+
+inline float SoftClip(float x) {
+  if (x < -3.0f) {
+    return -1.0f;
+  } else if (x > 3.0f) {
+    return 1.0f;
+  } else {
+    return SoftLimit(x);
+  }
+}
+
+static constexpr size_t delay_size = nextpow2_u32_constexpr(static_cast<uint32_t>(params.max_delay * bbd_samplerate) + 1);
 
 
 static dsp::DelayLine delay;
-static float delay_ram[delay_size];
+static __sdram float delay_ram[delay_size];
 
 static dsp::SimpleLFO lfo;
+
+static float wet_dry = .5f;
+static float drive = 1.45f;
 
 
 // the chips are effectively sampling at about 70kHz
@@ -66,17 +87,16 @@ void MODFX_PROCESS(const float *main_xn, float *main_yn,
   f32pair_t __restrict__ *output = reinterpret_cast<f32pair_t*>(main_yn);
 
   for(uint32_t i=0;i<frames;i++) {
-    const auto s = (input[i].a + input[i].b) * 0.5f;
-    delay.write(s);
+    delay.write(input[i].a + input[i].b);
 
     lfo.cycle();
-
     const auto lfo_sample = lfo.triangle_uni();
+
     const auto l = delay.readFrac((params.min_delay + ((params.max_delay - params.min_delay) * lfo_sample)) * bbd_samplerate);
     const auto r = delay.readFrac((params.min_delay + ((params.max_delay - params.min_delay) * (1 - lfo_sample))) * bbd_samplerate);
 
-    output[i].a = (l + input[i].a) * 0.5f;
-    output[i].b = (r + input[i].b) * 0.5f;
+    output[i].a = SoftClip(Crossfade(input[i].a, l, wet_dry) * drive);
+    output[i].b = SoftClip(Crossfade(input[i].b, r, wet_dry) * drive);
   }
 
   // ignore the sub on prologue
@@ -90,8 +110,10 @@ void MODFX_PARAM(uint8_t index, int32_t value)
   const float valf = q31_to_f32(value);
   switch (index) {
   case k_user_modfx_param_time:
+    //drive = 1 + valf;
     break;
   case k_user_modfx_param_depth:
+    wet_dry = valf;
     break;
   default:
     break;

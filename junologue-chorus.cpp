@@ -29,7 +29,7 @@ static constexpr float rates[] = {
 };
 
 static constexpr float _0db = 1.f, _3db = 0.707f, _infdb = 0.f;
-static constexpr f32pair_t gains[] = {
+static constexpr f32pair_t delay_gains[] = {
   { _0db, _infdb },
   { _infdb, _0db },
   { _3db, _3db }
@@ -74,7 +74,7 @@ static dsp::BiQuad pre_lpf, post_lpf_l, post_lpf_r;
 
 static mode_t mode = MODE_I;
 static float wet_dry = .5f;
-static const float drive = 1.45f;
+static const float output_gain = 1.414f;
 
 // the chips are effectively sampling at about 70kHz
 // a 12dB low-pass filter is used before the signal is sampled
@@ -119,11 +119,11 @@ void MODFX_PROCESS(const float *main_xn, float *main_yn,
     lfo_2.cycle();
 
     const auto s = f32pair_add(
-      f32pair_mulscal(readDelays(lfo_1.triangle_uni()), gains[mode].a),
-      f32pair_mulscal(readDelays(lfo_2.triangle_uni()), gains[mode].b));
+      f32pair_mulscal(readDelays(lfo_1.triangle_uni()), delay_gains[mode].a),
+      f32pair_mulscal(readDelays(lfo_2.triangle_uni()), delay_gains[mode].b));
 
-    output[i].a = SoftClip(Crossfade(input[i].a, post_lpf_l.process_fo(s.a), wet_dry) * drive);
-    output[i].b = SoftClip(Crossfade(input[i].b, post_lpf_r.process_fo(s.b), wet_dry) * drive);
+    output[i].a = SoftClip(Crossfade(input[i].a, post_lpf_l.process_fo(s.a), wet_dry) * output_gain);
+    output[i].b = SoftClip(Crossfade(input[i].b, post_lpf_r.process_fo(s.b), wet_dry) * output_gain);
   }
 
   // ignore the sub on prologue for now

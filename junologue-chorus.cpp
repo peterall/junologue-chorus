@@ -41,15 +41,15 @@ constexpr uint32_t nextpow2_u32_constexpr(uint32_t x) {
 
 inline float fastsqrt(float number)
 {
-	float x2 = number * 0.5f;
-	float y  = number;
-	long i  = * ( long * ) &y;
-	i  = 0x5f3759df - ( i >> 1 );
-	y  = * ( float * ) &i;
-	y  = y * ( 1.5f - ( x2 * y * y ) );
-	y  = y * ( 1.5f - ( x2 * y * y ) );
+  float x2 = number * 0.5f;
+  float y  = number;
+  long i  = * ( long * ) &y;
+  i  = 0x5f3759df - ( i >> 1 );
+  y  = * ( float * ) &i;
+  y  = y * ( 1.5f - ( x2 * y * y ) );
+  y  = y * ( 1.5f - ( x2 * y * y ) );
 
-	return 1.f / fabsf(y);
+  return 1.f / fabsf(y);
 }
 
 inline float SoftLimit(float x) {

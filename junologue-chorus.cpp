@@ -27,6 +27,8 @@ static constexpr delay_t delay_times[] = {
   { .min = 0.00151, .max = 0.00533 }
 };
 
+static constexpr float pre_lpf_cutoff = 8000.f, post_lpf_cutoff = 12000.f;
+
 static constexpr float rates[] = {
   0.513f, 0.863f
 };
@@ -93,7 +95,7 @@ void MODFX_INIT(uint32_t platform, uint32_t api)
   sub_delay.clear();
 
   main_pre_lpf.flush();
-  main_pre_lpf.mCoeffs.setFOLP(fx_tanpif(7237.f / samplerate));
+  main_pre_lpf.mCoeffs.setFOLP(fx_tanpif(pre_lpf_cutoff / samplerate));
   sub_pre_lpf.flush();
   sub_pre_lpf.mCoeffs = main_pre_lpf.mCoeffs;
 
@@ -103,7 +105,7 @@ void MODFX_INIT(uint32_t platform, uint32_t api)
   lfo_2.setF0(rates[1], 1.f / samplerate);
 
   main_post_lpf_l.flush();
-  main_post_lpf_l.mCoeffs.setFOLP(fx_tanpif(10644.f / samplerate));
+  main_post_lpf_l.mCoeffs.setFOLP(fx_tanpif(post_lpf_cutoff / samplerate));
   main_post_lpf_r.flush();
   main_post_lpf_r.mCoeffs = main_post_lpf_l.mCoeffs;
 

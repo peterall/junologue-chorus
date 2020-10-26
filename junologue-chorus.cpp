@@ -14,22 +14,17 @@ typedef struct {
   float max;
 } delay_t;
 
-typedef enum {
-  MODE_I,
-  MODE_I_II,
-  MODE_II,
-  NUMBER_OF_MODES
-} mode_t;
-
 static constexpr f32pair_t delay_gains[] = {
   { _0db, _infdb },
   { _3db, _3db },
   { _infdb, _0db }
 };
 
+static constexpr size_t mode_count = sizeof(delay_gains) / sizeof(f32pair_t);
+
 static constexpr delay_t delay_times[] = {
   { .min = 0.00154, .max = 0.00515 }, 
-  { .min = 0.00151, .max = 0.00540 }
+  { .min = 0.00151, .max = 0.00533 }
 };
 
 static constexpr float rates[] = {
@@ -74,15 +69,16 @@ inline float SoftClip(float x) {
 static constexpr size_t delay_size = 
   nextpow2_u32_constexpr(static_cast<uint32_t>(std::max(delay_times[0].max, delay_times[1].max) * samplerate) + 1);
 
-
-static dsp::DelayLine delay;
-static /* __sdram */ float delay_ram[delay_size];
+static dsp::DelayLine main_delay, sub_delay;;
+static float main_delay_ram[delay_size], sub_delay_ram[delay_size];
 
 static dsp::SimpleLFO lfo_1, lfo_2;
 
-static dsp::BiQuad pre_lpf, post_lpf_l, post_lpf_r;
+static dsp::BiQuad main_pre_lpf, sub_pre_lpf, 
+  main_post_lpf_l, main_post_lpf_r, 
+  sub_post_lpf_l, sub_post_lpf_r;
 
-static mode_t mode = MODE_I;
+static uint32_t mode = 0;
 static float mode_frac = 0.f;
 static float dry_gain = _3db, wet_gain = _3db;
 
@@ -91,31 +87,44 @@ static float dry_gain = _3db, wet_gain = _3db;
 
 void MODFX_INIT(uint32_t platform, uint32_t api)
 {
-  delay.setMemory(delay_ram, delay_size);  
+  main_delay.setMemory(main_delay_ram, delay_size);  
+  main_delay.clear();
+  sub_delay.setMemory(sub_delay_ram, delay_size);  
+  sub_delay.clear();
+
+  main_pre_lpf.flush();
+  main_pre_lpf.mCoeffs.setFOLP(fx_tanpif(7237.f / samplerate));
+  sub_pre_lpf.flush();
+  sub_pre_lpf.mCoeffs = main_pre_lpf.mCoeffs;
+
   lfo_1.reset();
   lfo_1.setF0(rates[0], 1.f / samplerate);
   lfo_2.reset();
   lfo_2.setF0(rates[1], 1.f / samplerate);
-  pre_lpf.flush();
-  pre_lpf.mCoeffs.setFOLP(fx_tanpif(7237.f / samplerate));
-  post_lpf_l.flush();
-  post_lpf_l.mCoeffs.setFOLP(fx_tanpif(10644.f / samplerate));
-  post_lpf_r.flush();
-  post_lpf_r.mCoeffs.setFOLP(fx_tanpif(10644.f / samplerate));
+
+  main_post_lpf_l.flush();
+  main_post_lpf_l.mCoeffs.setFOLP(fx_tanpif(10644.f / samplerate));
+  main_post_lpf_r.flush();
+  main_post_lpf_r.mCoeffs = main_post_lpf_l.mCoeffs;
+
+  sub_post_lpf_l.flush();
+  sub_post_lpf_l.mCoeffs = main_post_lpf_l.mCoeffs;
+  sub_post_lpf_r.flush();
+  sub_post_lpf_r.mCoeffs = main_post_lpf_l.mCoeffs;
 }
 
-inline float readDelay(const delay_t &d, const float p) {
-  return delay.readFrac((d.min + ((d.max - d.min) * p)) * samplerate);
+inline float readDelay(dsp::DelayLine &delay, const delay_t &t, const float p) {
+  return delay.readFrac((t.min + ((t.max - t.min) * p)) * samplerate);
 }
 
-inline f32pair_t readDelays(const float p) {
+inline f32pair_t readDelays(dsp::DelayLine &delay, const float p) {
   return {
-    readDelay(delay_times[0], p),
-    readDelay(delay_times[1], 1.f - p)
+    readDelay(delay, delay_times[0], p),
+    readDelay(delay, delay_times[1], 1.f - p)
   };
 }
 
-inline f32pair_t interpolateGain(const float fr, const mode_t x, const mode_t y) {
+inline f32pair_t interpolateGain(const float fr, const uint32_t x, const uint32_t y) {
     return { 
       linintf(fr, delay_gains[x].a, delay_gains[y].a),
       linintf(fr, delay_gains[x].b, delay_gains[y].b)
@@ -124,54 +133,71 @@ inline f32pair_t interpolateGain(const float fr, const mode_t x, const mode_t y)
 
 inline f32pair_t delayGains() {
   if(mode_frac < .1f && mode > 0) {
-    return interpolateGain(.5f + (mode_frac * 5.f), static_cast<mode_t>(mode-1), mode);
-  } else if(mode_frac > .9f && mode < NUMBER_OF_MODES - 1) {
-    return interpolateGain((mode_frac - .9f) * 5.f, mode, static_cast<mode_t>(mode+1));
+    return interpolateGain(.5f + (mode_frac * 5.f), mode - 1, mode);
+  } else if(mode_frac > .9f && mode < mode_count - 1) {
+    return interpolateGain((mode_frac - .9f) * 5.f, mode, mode + 1);
   } else {
     return delay_gains[mode];
   }
 }
 
-inline float EqualPowerCrossfade(const float a, const float b, const float fade) {
-  return (a * fastsqrt(1.f - fade)) + (b * fastsqrt(fade));
+inline f32pair_t f32pair_process_fo(dsp::BiQuad &fa, dsp::BiQuad &fb, const f32pair_t &s) {
+  return { fa.process_fo(s.a), fb.process_fo(s.b) };
+}
+
+inline float f32pair_reduce(const f32pair_t &p) {
+  return (p.a + p.b); //* _3db;
 }
 
 void MODFX_PROCESS(const float *main_xn, float *main_yn,
                    const float *sub_xn,  float *sub_yn,
                    uint32_t frames)
 {
-  const f32pair_t __restrict__ *input = reinterpret_cast<const f32pair_t*>(main_xn);
-  f32pair_t __restrict__ *output = reinterpret_cast<f32pair_t*>(main_yn);
+  const f32pair_t __restrict__ *main_input = reinterpret_cast<const f32pair_t*>(main_xn);
+  f32pair_t __restrict__ *main_output = reinterpret_cast<f32pair_t*>(main_yn);
+
+  const f32pair_t __restrict__ *sub_input = reinterpret_cast<const f32pair_t*>(sub_xn);
+  f32pair_t __restrict__ *sub_output = reinterpret_cast<f32pair_t*>(sub_yn);
+
+  const f32pair_t *main_output_end = main_output + frames;
 
   const auto delay_gain = delayGains();
 
-  for(uint32_t i=0;i<frames;i++) {
-    delay.write(pre_lpf.process_so(SoftLimit((input[i].a + input[i].b) * _3db)));
+  while(main_output != main_output_end) {
+    main_delay.write(main_pre_lpf.process_fo(SoftLimit(f32pair_reduce(*main_input))));
+    sub_delay.write(sub_pre_lpf.process_fo(SoftLimit(f32pair_reduce(*sub_input))));
 
     lfo_1.cycle();
     lfo_2.cycle();
 
-    const auto s = f32pair_add(
-      f32pair_mulscal(readDelays(lfo_1.triangle_uni()), delay_gain.a),
-      f32pair_mulscal(readDelays(lfo_2.triangle_uni()), delay_gain.b));
+    const float lfo_val1 = lfo_1.triangle_uni(), lfo_val2 = lfo_2.triangle_uni();
 
-    output[i].a = dry_gain * input[i].a + wet_gain * post_lpf_l.process_fo(s.a);
-    output[i].b = dry_gain * input[i].b + wet_gain * post_lpf_r.process_fo(s.b);
+    const auto main = f32pair_add(
+      f32pair_mulscal(readDelays(main_delay, lfo_val1), delay_gain.a),
+      f32pair_mulscal(readDelays(main_delay, lfo_val2), delay_gain.b));
+
+    *main_output++ = f32pair_add(
+      f32pair_mulscal(*main_input++, dry_gain), 
+      f32pair_mulscal(f32pair_process_fo(main_post_lpf_l, main_post_lpf_r, main), wet_gain));
+
+    const auto sub = f32pair_add(
+      f32pair_mulscal(readDelays(sub_delay, lfo_val1), delay_gain.a),
+      f32pair_mulscal(readDelays(sub_delay, lfo_val2), delay_gain.b));
+
+    *sub_output++ = f32pair_add(
+      f32pair_mulscal(*sub_input++, dry_gain), 
+      f32pair_mulscal(f32pair_process_fo(sub_post_lpf_l, sub_post_lpf_r, sub), wet_gain));
   }
-
-  // ignore the sub on prologue for now
-  buf_cpy_f32(sub_xn, sub_yn, frames);
 }
 
 void MODFX_PARAM(uint8_t index, int32_t value)
 {
-  // normalize to 0..1
   const float valf = q31_to_f32(value);
   switch (index) {
   case k_user_modfx_param_time:
     {
-      const float v = valf * (static_cast<float>(NUMBER_OF_MODES) - 0.0001f);
-      mode = static_cast<mode_t>(v);
+      const float v = valf * (static_cast<float>(mode_count) - 0.0001f);
+      mode = static_cast<uint32_t>(v);
       mode_frac = v - mode;
     }
     break;

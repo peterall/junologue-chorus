@@ -29,17 +29,14 @@ CMSISDIR = $(EXTDIR)/CMSIS/CMSIS
 
 ifeq ($(PLATFORM), prologue)
     PKGSUFFIX = prlgunit
-	BLOCKSIZE = 16
 endif
 
 ifeq ($(PLATFORM), minilogue-xd)
     PKGSUFFIX = mnlgxdunit
-	BLOCKSIZE = 16
 endif
 
 ifeq ($(PLATFORM), nutekt-digital)
     PKGSUFFIX = ntkdigunit
-	BLOCKSIZE = 64
 endif
 
 # #############################################################################

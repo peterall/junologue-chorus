@@ -29,15 +29,20 @@ static constexpr f32pair_t delay_gains[] = {
 static constexpr size_t mode_count = sizeof(delay_gains) / sizeof(f32pair_t);
 
 static constexpr range_t delay_times[] = {
-  { .min = 0.00154, .max = 0.00515 }, 
+  { .min = 0.00154, .max = 0.00515 },  
   { .min = 0.00151, .max = 0.00540 }
 };
 
-static constexpr range_t pre_lpf_cutoff = {  .min = 4000.f, .max = 17000.f },
-                         post_lpf_cutoff = { .min = 6500.f, .max = 23000.f };
-
 static constexpr float rates[] = {
   0.513f, 0.863f
+};
+
+static constexpr range_t pre_lpf_cutoff = { 
+  .min = 2000.f, .max = 23500.f 
+};
+
+static constexpr range_t post_lpf_cutoff = {
+  .min = 6000.f, .max = 23500.f
 };
 
 constexpr uint32_t nextpow2_u32_constexpr(uint32_t x) {
@@ -62,16 +67,6 @@ inline float fastsqrt(float number) {
 
 inline float SoftLimit(float x) {
   return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
-}
-
-inline float SoftClip(float x) {
-  if (x < -3.0f) {
-    return -1.0f;
-  } else if (x > 3.0f) {
-    return 1.0f;
-  } else {
-    return SoftLimit(x);
-  }
 }
 
 static constexpr size_t delay_size = 

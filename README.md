@@ -1,4 +1,4 @@
-# Juno 60 Chorus Emulation 
+# Junologue Chorus - Juno 60 Chorus Emulation 
 ## For Korg Prologue, Minilogue XD and Nu:tekt NTS-1
 
 ![Controls](https://raw.githubusercontent.com/peterall/junologue-chorus/main/junologue-chorus-controls.png)
@@ -6,6 +6,8 @@
 **Speed** knob switches between the three modes: **I, I-II, II**. Within the mode the timbre is brightened by turning clockwise.
 
 **Depth** knob controls dry/wet ratio.
+
+Audio examples are available on [Soundcloud](https://soundcloud.com/vriff-polo/sets/junologue-juno-60-chorus-for-korg-prologue-minilogue-xd-and-nts-1).
 
 _Note that the I-II* mode is different from the Juno 60 "both buttons in" mode. I'm not a big fan of the original mono vibrato effect so in this emulation I-II* mode enables both choruses in parallel, similar to the TAL U-NO-LX._
 

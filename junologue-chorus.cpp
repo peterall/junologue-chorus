@@ -12,7 +12,13 @@ static constexpr float _0db = 1.f, _3db = M_1_SQRT2, _infdb = 0.f;
 typedef struct {
   float min;
   float max;
-} delay_t;
+} range_t;
+
+typedef struct {
+  f32pair_t delay_gain;
+  float pre_lpf_cutoff;
+  float post_lpf_cutoff;
+} chorus_params_t;
 
 static constexpr f32pair_t delay_gains[] = {
   { _0db, _infdb },
@@ -22,12 +28,13 @@ static constexpr f32pair_t delay_gains[] = {
 
 static constexpr size_t mode_count = sizeof(delay_gains) / sizeof(f32pair_t);
 
-static constexpr delay_t delay_times[] = {
+static constexpr range_t delay_times[] = {
   { .min = 0.00154, .max = 0.00515 }, 
-  { .min = 0.00151, .max = 0.00533 }
+  { .min = 0.00151, .max = 0.00540 }
 };
 
-static constexpr float pre_lpf_cutoff = 8000.f, post_lpf_cutoff = 12000.f;
+static constexpr range_t pre_lpf_cutoff = {  .min = 4000.f, .max = 17000.f },
+                         post_lpf_cutoff = { .min = 6500.f, .max = 23000.f };
 
 static constexpr float rates[] = {
   0.513f, 0.863f
@@ -41,8 +48,7 @@ constexpr uint32_t nextpow2_u32_constexpr(uint32_t x) {
   return ++x;
 }
 
-inline float fastsqrt(float number)
-{
+inline float fastsqrt(float number) {
   float x2 = number * 0.5f;
   float y  = number;
   long i  = * ( long * ) &y;
@@ -72,20 +78,31 @@ static constexpr size_t delay_size =
   nextpow2_u32_constexpr(static_cast<uint32_t>(std::max(delay_times[0].max, delay_times[1].max) * samplerate) + 1);
 
 static dsp::DelayLine main_delay, sub_delay;;
-static float main_delay_ram[delay_size], sub_delay_ram[delay_size];
+static __sdram float main_delay_ram[delay_size], sub_delay_ram[delay_size];
 
 static dsp::SimpleLFO lfo_1, lfo_2;
 
-static dsp::BiQuad main_pre_lpf, sub_pre_lpf, 
-  main_post_lpf_l, main_post_lpf_r, 
-  sub_post_lpf_l, sub_post_lpf_r;
+static dsp::BiQuad main_pre_lpf, sub_pre_lpf,
+    main_post_lpf_l, main_post_lpf_r,
+    sub_post_lpf_l, sub_post_lpf_r;
 
-static uint32_t mode = 0;
-static float mode_frac = 0.f;
+static f32pair_t delay_gain = delay_gains[0];
 static float dry_gain = _3db, wet_gain = _3db;
 
 // the chips are effectively sampling at about 70kHz
 // a 12dB low-pass filter is used before the signal is sampled
+
+inline void setLpfCutoff(const float fr) {
+  main_pre_lpf.mCoeffs.setFOLP(fx_tanpif(linintf(fr * fr, 
+    pre_lpf_cutoff.min / samplerate, pre_lpf_cutoff.max / samplerate)));
+  sub_pre_lpf.mCoeffs = main_pre_lpf.mCoeffs;
+
+  main_post_lpf_l.mCoeffs.setFOLP(fx_tanpif(linintf(fr * fr, 
+    post_lpf_cutoff.min / samplerate, post_lpf_cutoff.max / samplerate)));
+  main_post_lpf_r.mCoeffs = main_post_lpf_l.mCoeffs;
+  sub_post_lpf_l.mCoeffs = main_post_lpf_l.mCoeffs;
+  sub_post_lpf_r.mCoeffs = main_post_lpf_l.mCoeffs;
+}
 
 void MODFX_INIT(uint32_t platform, uint32_t api)
 {
@@ -95,9 +112,7 @@ void MODFX_INIT(uint32_t platform, uint32_t api)
   sub_delay.clear();
 
   main_pre_lpf.flush();
-  main_pre_lpf.mCoeffs.setFOLP(fx_tanpif(pre_lpf_cutoff / samplerate));
   sub_pre_lpf.flush();
-  sub_pre_lpf.mCoeffs = main_pre_lpf.mCoeffs;
 
   lfo_1.reset();
   lfo_1.setF0(rates[0], 1.f / samplerate);
@@ -105,17 +120,14 @@ void MODFX_INIT(uint32_t platform, uint32_t api)
   lfo_2.setF0(rates[1], 1.f / samplerate);
 
   main_post_lpf_l.flush();
-  main_post_lpf_l.mCoeffs.setFOLP(fx_tanpif(post_lpf_cutoff / samplerate));
   main_post_lpf_r.flush();
-  main_post_lpf_r.mCoeffs = main_post_lpf_l.mCoeffs;
-
   sub_post_lpf_l.flush();
-  sub_post_lpf_l.mCoeffs = main_post_lpf_l.mCoeffs;
   sub_post_lpf_r.flush();
-  sub_post_lpf_r.mCoeffs = main_post_lpf_l.mCoeffs;
+
+  setLpfCutoff(.5f);
 }
 
-inline float readDelay(dsp::DelayLine &delay, const delay_t &t, const float p) {
+inline float readDelay(dsp::DelayLine &delay, const range_t &t, const float p) {
   return delay.readFrac((t.min + ((t.max - t.min) * p)) * samplerate);
 }
 
@@ -124,23 +136,6 @@ inline f32pair_t readDelays(dsp::DelayLine &delay, const float p) {
     readDelay(delay, delay_times[0], p),
     readDelay(delay, delay_times[1], 1.f - p)
   };
-}
-
-inline f32pair_t interpolateGain(const float fr, const uint32_t x, const uint32_t y) {
-    return { 
-      linintf(fr, delay_gains[x].a, delay_gains[y].a),
-      linintf(fr, delay_gains[x].b, delay_gains[y].b)
-    };
-}
-
-inline f32pair_t delayGains() {
-  if(mode_frac < .1f && mode > 0) {
-    return interpolateGain(.5f + (mode_frac * 5.f), mode - 1, mode);
-  } else if(mode_frac > .9f && mode < mode_count - 1) {
-    return interpolateGain((mode_frac - .9f) * 5.f, mode, mode + 1);
-  } else {
-    return delay_gains[mode];
-  }
 }
 
 inline f32pair_t f32pair_process_fo(dsp::BiQuad &fa, dsp::BiQuad &fb, const f32pair_t &s) {
@@ -162,8 +157,6 @@ void MODFX_PROCESS(const float *main_xn, float *main_yn,
   f32pair_t __restrict__ *sub_output = reinterpret_cast<f32pair_t*>(sub_yn);
 
   const f32pair_t *main_output_end = main_output + frames;
-
-  const auto delay_gain = delayGains();
 
   while(main_output != main_output_end) {
     main_delay.write(main_pre_lpf.process_fo(SoftLimit(f32pair_reduce(*main_input))));
@@ -192,16 +185,40 @@ void MODFX_PROCESS(const float *main_xn, float *main_yn,
   }
 }
 
+inline f32pair_t interpolateGain(const float fr, const uint32_t x, const uint32_t y) {
+    return { 
+      linintf(fr, delay_gains[x].a, delay_gains[y].a),
+      linintf(fr, delay_gains[x].b, delay_gains[y].b)
+    };
+}
+
+inline void updateTimeParam(const float value) {
+  const auto value_scaled = value * (static_cast<float>(mode_count) - 0.0001f);
+  const auto mode = static_cast<uint32_t>(value_scaled);
+  const auto mode_frac = value_scaled - mode;
+
+  if(mode_frac < .1f && mode > 0) {
+    const float fr = .5f + (mode_frac * 5.f);
+    delay_gain = interpolateGain(fr, mode - 1, mode);
+    setLpfCutoff(1.f - fr);
+
+  } else if(mode_frac > .9f && mode < mode_count - 1) {
+    const float fr = (mode_frac - .9f) * 5.f;
+    delay_gain = interpolateGain(fr, mode, mode + 1);
+    setLpfCutoff(1.f - fr);
+
+  } else {
+    delay_gain = delay_gains[mode];
+    setLpfCutoff(std::max(0.f, std::min((mode_frac - .1f) * 1.25f, 1.f)));
+  }
+}
+
 void MODFX_PARAM(uint8_t index, int32_t value)
 {
   const float valf = q31_to_f32(value);
   switch (index) {
   case k_user_modfx_param_time:
-    {
-      const float v = valf * (static_cast<float>(mode_count) - 0.0001f);
-      mode = static_cast<uint32_t>(v);
-      mode_frac = v - mode;
-    }
+    updateTimeParam(valf);
     break;
   case k_user_modfx_param_depth:
     dry_gain = fastsqrt(1.f - valf);

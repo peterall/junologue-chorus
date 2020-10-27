@@ -5,7 +5,7 @@
 
 **Speed** knob switches between the three modes: **I, I-II, II**. Within the mode the timbre is brightened by turning clockwise.
 
-**Depth** knob controls dry/wet ratio.
+**Depth** knob controls dry/wet ratio. The sweet Juno sound is somewhere 12 o'clock.
 
 Audio examples are available on [Soundcloud](https://soundcloud.com/vriff-polo/sets/junologue-juno-60-chorus-for-korg-prologue-minilogue-xd-and-nts-1).
 

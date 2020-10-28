@@ -87,7 +87,7 @@ DLIBS = -lm
 DADEFS = -DSTM32F446xE -DCORTEX_USE_FPU=TRUE -DARM_MATH_CM4
 DDEFS = -DSTM32F446xE -DCORTEX_USE_FPU=TRUE -DARM_MATH_CM4 -D__FPU_PRESENT -DSUB_ENABLED=$(SUB_ENABLED)
 
-COPT = -std=c11 -mstructure-size-boundary=8
+COPT = -std=c11 -mstructure-size-boundary=8 -funroll-loops -ffast-math
 CXXOPT = -std=c++14 -fno-rtti -fno-exceptions -fno-non-call-exceptions -funroll-loops -ffast-math
 
 LDOPT = -Xlinker --just-symbols=$(LDDIR)/main_api.syms
@@ -184,8 +184,8 @@ POST_ALL: package
 $(OBJS): | $(BUILDDIR) $(OBJDIR) $(LSTDIR)
 
 $(BUILDDIR):
-	@echo Compiler Options
-	@echo $(CC) -c $(CFLAGS) -I. $(INCDIR)
+	@echo C++ Compiler Options
+	@echo $(CXXC) -c $(CXXFLAGS) -I. $(INCDIR)
 	@echo
 	@mkdir -p $(BUILDDIR)
 

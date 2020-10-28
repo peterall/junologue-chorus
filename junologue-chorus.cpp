@@ -14,12 +14,6 @@ typedef struct {
   float max;
 } range_t;
 
-typedef struct {
-  f32pair_t delay_gain;
-  float pre_lpf_cutoff;
-  float post_lpf_cutoff;
-} chorus_params_t;
-
 static constexpr f32pair_t delay_gains[] = {
   { _0db, _infdb },
   { _3db, _3db },

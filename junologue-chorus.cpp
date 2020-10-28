@@ -155,7 +155,9 @@ void MODFX_PROCESS(const float *main_xn, float *main_yn,
 
   while(main_output != main_output_end) {
     main_delay.write(main_pre_lpf.process_fo(SoftLimit(f32pair_reduce(*main_input))));
-    sub_delay.write(sub_pre_lpf.process_fo(SoftLimit(f32pair_reduce(*sub_input))));
+    if(SUB_ENABLED) {
+      sub_delay.write(sub_pre_lpf.process_fo(SoftLimit(f32pair_reduce(*sub_input))));
+    }
 
     lfo_1.cycle();
     lfo_2.cycle();
@@ -170,13 +172,15 @@ void MODFX_PROCESS(const float *main_xn, float *main_yn,
       f32pair_mulscal(*main_input++, dry_gain), 
       f32pair_mulscal(f32pair_process_fo(main_post_lpf_l, main_post_lpf_r, main), wet_gain));
 
-    const auto sub = f32pair_add(
-      f32pair_mulscal(readDelays(sub_delay, lfo_val1), delay_gain.a),
-      f32pair_mulscal(readDelays(sub_delay, lfo_val2), delay_gain.b));
+    if(SUB_ENABLED) {   
+      const auto sub = f32pair_add(
+        f32pair_mulscal(readDelays(sub_delay, lfo_val1), delay_gain.a),
+        f32pair_mulscal(readDelays(sub_delay, lfo_val2), delay_gain.b));
 
-    *sub_output++ = f32pair_add(
-      f32pair_mulscal(*sub_input++, dry_gain), 
-      f32pair_mulscal(f32pair_process_fo(sub_post_lpf_l, sub_post_lpf_r, sub), wet_gain));
+      *sub_output++ = f32pair_add(
+        f32pair_mulscal(*sub_input++, dry_gain), 
+        f32pair_mulscal(f32pair_process_fo(sub_post_lpf_l, sub_post_lpf_r, sub), wet_gain));
+    }
   }
 }
 

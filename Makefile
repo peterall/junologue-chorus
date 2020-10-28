@@ -2,7 +2,7 @@ TOPTARGETS := all
 
 PLATFORMS := prologue minilogue-xd nutekt-digital
 
-VERSION=1.2-0
+VERSION=1.2-1
 PACKAGE = junologue-chorus-$(VERSION).zip
 
 $(TOPTARGETS): $(PLATFORMS) package

@@ -14,7 +14,8 @@
                 "DARM_MATH_CM4",
                 "__FPU_PRESENT",
                 "_USE_MATH_DEFINES",
-                "uint32_t=unsigned long int"
+                "uint32_t=unsigned long int",
+                "SUB_ENABLED=true"
             ],
             "compilerPath": "${workspaceFolder}/logue-sdk/tools/gcc/gcc-arm-none-eabi-5_4-2016q3/bin/arm-none-eabi-gcc",
             "cStandard": "c11",

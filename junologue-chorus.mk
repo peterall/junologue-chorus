@@ -29,14 +29,17 @@ CMSISDIR = $(EXTDIR)/CMSIS/CMSIS
 
 ifeq ($(PLATFORM), prologue)
     PKGSUFFIX = prlgunit
+	SUB_ENABLED = true
 endif
 
 ifeq ($(PLATFORM), minilogue-xd)
     PKGSUFFIX = mnlgxdunit
+	SUB_ENABLED = false
 endif
 
 ifeq ($(PLATFORM), nutekt-digital)
     PKGSUFFIX = ntkdigunit
+	SUB_ENABLED = false
 endif
 
 # #############################################################################
@@ -82,10 +85,10 @@ LDSCRIPT = $(LDDIR)/usermodfx.ld
 DLIBS = -lm
 
 DADEFS = -DSTM32F446xE -DCORTEX_USE_FPU=TRUE -DARM_MATH_CM4
-DDEFS = -DSTM32F446xE -DCORTEX_USE_FPU=TRUE -DARM_MATH_CM4 -D__FPU_PRESENT
+DDEFS = -DSTM32F446xE -DCORTEX_USE_FPU=TRUE -DARM_MATH_CM4 -D__FPU_PRESENT -DSUB_ENABLED=$(SUB_ENABLED)
 
 COPT = -std=c11 -mstructure-size-boundary=8
-CXXOPT = -std=c++14 -fno-rtti -fno-exceptions -fno-non-call-exceptions -funroll-loops
+CXXOPT = -std=c++14 -fno-rtti -fno-exceptions -fno-non-call-exceptions -funroll-loops -ffast-math
 
 LDOPT = -Xlinker --just-symbols=$(LDDIR)/main_api.syms
 
